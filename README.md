@@ -4,6 +4,8 @@
 
 > ⚠️ This patch is unstable as it is not fully tested, follow [PR#1650](https://github.com/strapi/strapi/pull/1650) for more information.
 
+> ⚠️ Don't use decimals. Use floats instead.
+
 ## Usage
 
 To get started with GraphQL in your app, please install the plugin first. To do that, open your terminal and run the following command in your strapi project directory:
