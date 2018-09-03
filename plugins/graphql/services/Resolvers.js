@@ -8,6 +8,7 @@
 
 const _ = require('lodash');
 const pluralize = require('pluralize');
+const Aggregator = require('./Aggregator');
 const Query = require('./Query.js');
 const Mutation = require('./Mutation.js');
 const Types = require('./Types.js');
@@ -245,6 +246,27 @@ module.exports = {
           });
         }
       });
+
+      // TODO:
+      // - Add support for Graphql Aggregation in Bookshelf ORM
+      if (model.orm === 'mongoose') {
+        // Generation the aggregation for the given model
+        const modelAggregator = Aggregator.formatModelConnectionsGQL(
+          attributes,
+          model,
+          name,
+          queries.plural,
+        );
+        if (modelAggregator) {
+          acc.definition += modelAggregator.type;
+          if (!acc.resolver[modelAggregator.globalId]) {
+            acc.resolver[modelAggregator.globalId] = {};
+          }
+
+          _.merge(acc.resolver, modelAggregator.resolver);
+          _.merge(acc.query, modelAggregator.query);
+        }
+      }
 
       // Build associations queries.
       (model.associations || []).forEach(association => {
