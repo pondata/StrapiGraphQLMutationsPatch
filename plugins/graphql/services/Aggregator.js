@@ -1,4 +1,163 @@
+'use strict';
+
+/**
+ * Aggregator.js service
+ *
+ * @description: A set of functions similar to controller's actions to avoid code duplication.
+ */
+
+const _ = require('lodash');
+const pluralize = require('pluralize');
+const Schema = require('./Schema.js');
+
 module.exports = {
+  /**
+   * Returns all fields of type primitive
+   *
+   * @returns {Boolean}
+   */
+  isPrimitiveType: _type => {
+    const type = _type.replace('!', '');
+    return (
+      type === 'Int' ||
+      type === 'Float' ||
+      type === 'String' ||
+      type === 'Boolean' ||
+      type === 'DateTime' ||
+      type === 'JSON'
+    );
+  },
+
+  /**
+   * Checks if the field is of type enum
+   *
+   * @returns {Boolean}
+   */
+  isEnumType: type => {
+    return type === 'enumeration';
+  },
+
+  /**
+   * Returns all fields that are not of type array
+   *
+   * @returns {Boolean}
+   *
+   * @example
+   *
+   * isNotOfTypeArray([String])
+   * // => false
+   * isNotOfTypeArray(String!)
+   * // => true
+   */
+  isNotOfTypeArray: type => {
+    return !/(\[\w+!?\])/.test(type);
+  },
+
+  /**
+   * Returns all fields of type Integer or float
+   */
+  isNumberType: type => {
+    return type === 'Int' || type === 'Float';
+  },
+
+  /**
+   * Convert parameters to valid filters parameters.
+   *
+   * @return Object
+   */
+
+  convertToParams: params => {
+    return Object.keys(params).reduce((acc, current) => {
+      return Object.assign(acc, {
+        [`_${current}`]: params[current],
+      });
+    }, {});
+  },
+
+  /**
+   * Returns a list of fields that have type included in fieldTypes.
+   */
+  getFieldsByTypes: (fields, typeCheck, returnType) => {
+    return _.reduce(
+      fields,
+      (acc, fieldType, fieldName) => {
+        if (typeCheck(fieldType)) {
+          acc[fieldName] = returnType(fieldType, fieldName);
+        }
+        return acc;
+      },
+      {},
+    );
+  },
+
+  /**
+   * Use the field resolver otherwise fall through the field value
+   *
+   * @returns {function}
+   */
+  fieldResolver: (field, key) => {
+    return object => {
+      const resolver =
+        field.resolve ||
+        function resolver(obj, options, context) {
+          // eslint-disable-line no-unused-vars
+          return obj[key];
+        };
+      return resolver(object);
+    };
+  },
+
+  /**
+   * Create fields resolvers
+   *
+   * @return {Object}
+   */
+  createFieldsResolver: function(fields, resolver, typeCheck) {
+    return Object.keys(fields).reduce((acc, fieldKey) => {
+      const field = fields[fieldKey];
+      // Check if the field is of the correct type
+      if (typeCheck(field)) {
+        return _.set(acc, fieldKey, (obj, options, context) => {
+          return resolver(
+            obj,
+            options,
+            context,
+            this.fieldResolver(field, fieldKey),
+            fieldKey,
+            obj,
+            field,
+          );
+        });
+      }
+      return acc;
+    }, {});
+  },
+
+  /**
+   * Convert non-primitive type to string (non-primitive types corresponds to a reference to an other model)
+   *
+   * @returns {String}
+   *
+   * @example
+   *
+   * extractType(String!)
+   * // => String
+   *
+   * extractType(user)
+   * // => ID
+   *
+   * extractType(ENUM_TEST_FIELD, enumeration)
+   * // => String
+   *
+   */
+  extractType: function(_type, attributeType) {
+    return this.isPrimitiveType(_type)
+      ? _type.replace('!', '')
+      : this.isEnumType(attributeType)
+        ? 'String'
+        : 'ID';
+  },
+
   /**
    * Build the mongoose aggregator by applying the filters
    */
@@ -177,7 +336,7 @@ module.exports = {
       aggregate: `${globalId}Aggregator`,
     };
 
-    let modelConnectionTypes = `type ${connectionGlobalId} {${this.formatGQL(
+    let modelConnectionTypes = `type ${connectionGlobalId} {${Schema.formatGQL(
       connectionFields,
     )}}\n\n`;
     if (aggregatorFormat) {
@@ -229,6 +388,22 @@ module.exports = {
   },
 
   /**
+   * Returns a list of fields that have type included in fieldTypes.
+   */
+  getFieldsByTypes: (fields, typeCheck, returnType) => {
+    return _.reduce(
+      fields,
+      (acc, fieldType, fieldName) => {
+        if (typeCheck(fieldType)) {
+          acc[fieldName] = returnType(fieldType, fieldName);
+        }
+        return acc;
+      },
+      {},
+    );
+  },
+
+  /**
    * Generate the connection type of each non-array field of the model
    *
    * @return {String}
@@ -251,7 +426,7 @@ module.exports = {
         fieldKey =>
           `type ${globalId}Connection${_.upperFirst(
             fieldKey,
-          )} {${this.formatGQL(connectionFields[fieldKey])}}`,
+          )} {${Schema.formatGQL(connectionFields[fieldKey])}}`,
       )
       .join('\n\n');
   },
@@ -269,7 +444,7 @@ module.exports = {
     );
 
     // Get the generated field types
-    let groupByTypes = `type ${groupByGlobalId} {${this.formatGQL(
+    let groupByTypes = `type ${groupByGlobalId} {${Schema.formatGQL(
       groupByFields,
     )}}\n\n`;
     groupByTypes += this.generateConnectionFieldsTypes(fields, model);
@@ -310,8 +485,8 @@ module.exports = {
       });
     }
 
-    const gqlNumberFormat = this.formatGQL(numericFields);
-    let aggregatorTypes = `type ${aggregatorGlobalId} {${this.formatGQL(
+    const gqlNumberFormat = Schema.formatGQL(numericFields);
+    let aggregatorTypes = `type ${aggregatorGlobalId} {${Schema.formatGQL(
       initialFields,
     )}}\n\n`;
 
