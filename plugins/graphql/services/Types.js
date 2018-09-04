@@ -41,6 +41,9 @@ module.exports = {
         case 'integer':
           type = 'Int';
           break;
+        case 'decimal':
+          type = 'Float';
+          break;
         case 'float':
           type = 'Float';
           break;
@@ -201,7 +204,7 @@ module.exports = {
 
   generateInputPayloadArguments: function(model, name, type, resolver) {
     if (_.get(resolver, `Mutation.${type}${_.capitalize(name)}`) === false) {
-      return ``;
+      return '';
     }
 
     const inputName = `${_.capitalize(name)}Input`;
